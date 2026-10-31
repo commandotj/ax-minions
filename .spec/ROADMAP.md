@@ -97,10 +97,10 @@ RFC (Request for Comments) 是 commando-react 项目中用于记录和跟踪重�
 
 | 状态                | 数量   | 百分比   |
 | ------------------- | ------ | -------- |
-| 🔵 Proposed         | 11     | 35.5%    |
+| 🔵 Proposed         | 10     | 32.3%    |
 | 🟡 Under Discussion | 0      | 0%       |
 | 🟠 Under Review     | 0      | 0%       |
-| 🟢 Approved         | 5      | 16.1%    |
+| 🟢 Approved         | 6      | 19.4%    |
 | 🔵 In Progress      | 0      | 0%       |
 | ✅ Completed        | 10     | 32.3%    |
 | ❌ Deprecated       | 5      | 16.1%    |
@@ -142,7 +142,7 @@ P1 交付的是 core CLI 闭环；P1.5 接着把它接到 UI，并补上 verify/
 | 11   | [RFC-2026-034](./rfc/034-ui-consolidation.md)                | UI 整合 + **Wails CLI bridge（Gap 4）** | 🔶 In Progress；**Gap 4 挡 038/039/041 UI 验收**                      |
 | 12   | [RFC-2026-037](./rfc/037-compare-cli-diff-view.md)           | Compare spawn + diff view（步骤 2–3）   | 依赖 034 Gap 4 + Gap 2；037 §2.1 CLI 部分已实现                       |
 | 13   | [RFC-2026-039](./rfc/039-execute-verify-parity.md)           | Verify 覆盖 delete（步骤6 一部分）      | 与 14 可并行，互不依赖                                                |
-| 14   | [RFC-2026-041](./rfc/041-plan-persistence-replay-history.md) | Plan/ExecuteResult 持久化、replay、历史 | 与 13 可并行；是 15 的地基                                            |
+| 14   | [RFC-2026-041](./rfc/041-plan-persistence-replay-history.md) | Plan/ExecuteResult 持久化、replay、历史 | 与 13 可并行；是 15 的地基；**2026-08-08 批准**                       |
 | 15   | [RFC-2026-040](./rfc/040-restorable-cleanup-restore.md)      | Restorable 清理/撤销（步骤7）           | **依赖 13（Restorable 来源）+ 14（按 Plan.ID 持久化查询）**，最后实施 |
 
 **伞 RFC：** [RFC-2026-038](./rfc/038-sync-execution-verify-restore-replan.md) 为 039/040/041 的能力目录，不占 P1.5 实现序号，完成标准是三份子 RFC 全部 Approved（非物理代码完工）。
@@ -179,6 +179,7 @@ P1.5 完成 = 8 步工作流全部经 **Wails spawn CLI** 端到端可用（038 
 | [RFC-2026-024](./rfc/completed/024-reports.md)                      | Reports — Session Log, LastSyncs & Email                  | albert.li | 2026-07-29 | 2026-07-30 | ✅ Completed |
 | [RFC-2026-027](./rfc/completed/027-delete-operations.md)            | Delete Operations — Recycle Bin & Versioning              | albert.li | 2026-07-29 | 2026-07-30 | ✅ Completed |
 | [RFC-2026-028](./rfc/completed/028-execution-options.md)            | Execution Options — ctx, verify, atomic copy              | albert.li | 2026-07-29 | 2026-07-30 | ✅ Completed |
+| [RFC-2026-041](./rfc/041-plan-persistence-replay-history.md)        | Plan & ExecuteResult Persistence — Replay & History       | albert.li | 2026-07-31 | 2026-08-08 | 🟢 Approved  |
 
 ### 架构设计 RFC
 
@@ -203,7 +204,6 @@ _暂无_
 | [RFC-2026-038](./rfc/038-sync-execution-verify-restore-replan.md)         | Sync Execution E2E — Verify, Restore & Re-runnable Plans **(Umbrella)** | albert.li/AI | 2026-07-31 | 🔵 Proposed |
 | [RFC-2026-039](./rfc/039-execute-verify-parity.md)                        | Execute — Verify Parity for Delete（子 RFC of 038）                     | albert.li/AI | 2026-07-31 | 🔵 Proposed |
 | [RFC-2026-040](./rfc/040-restorable-cleanup-restore.md)                   | Restorable — Cleanup & Restore After Sync（子 RFC of 038）              | albert.li/AI | 2026-07-31 | 🔵 Proposed |
-| [RFC-2026-041](./rfc/041-plan-persistence-replay-history.md)              | Plan & ExecuteResult Persistence — Replay & History（子 RFC of 038）    | albert.li/AI | 2026-07-31 | 🔵 Proposed |
 
 ### 已废弃的 RFC
 
@@ -227,7 +227,7 @@ _暂无_
 | ---- | ---- | ------ | ------ | ------ | ------ | ------ |
 | 2024 | 4    | 4      | 0      | 0      | 0      | 0      |
 | 2025 | 6    | 1      | 0      | 0      | 0      | 5      |
-| 2026 | 21   | 3      | 8      | 0      | 10     | 0      |
+| 2026 | 21   | 3      | 9      | 0      | 9      | 0      |
 
 ### 按作者统计
 
@@ -280,6 +280,7 @@ _暂无_
 
 | 时间       | RFC          | 更新内容                                                                           | 作者            |
 | ---------- | ------------ | ---------------------------------------------------------------------------------- | --------------- |
+| 2026-08-08 | RFC-2026-041 | 批准：Plan/ExecuteResult 持久化、replay、历史 Viewer（子 RFC of 038）              | albert.li/AI    |
 | 2026-07-30 | RFC-2026-019 | CLI-first filter 完成：BuildPlan→engine.IndexRoot, Validate(), --include/--exclude | albert.li/AI    |
 | 2026-07-29 | RFC-2026-012 | Feature ID 全部绑定现存 Owner RFC；新增 RFC-029/030                                | Codex/albert.li |
 | 2026-07-27 | RFC-2026-013 | Dev/Prod 身份、图标、打包入口与运行时验证完成                                      | Codex/albert.li |

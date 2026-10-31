@@ -84,6 +84,9 @@ func BuildPlan(ctx context.Context, leftRoot, rightRoot string, direction Direct
 		}
 	}
 
+	// ponytail: best-effort like GenerateSessionLog — a read-only left root
+	// must still compare/sync; it only loses replay/history for this plan.
+	_ = SavePlan(leftRoot, plan)
 	return plan, nil
 }
 

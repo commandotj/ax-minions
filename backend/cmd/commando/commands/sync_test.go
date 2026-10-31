@@ -91,3 +91,74 @@ func TestPlanCmd_NoProgressFlag_UnchangedOutput(t *testing.T) {
 		t.Errorf("expected plan JSON to have items field, got: %v", plan)
 	}
 }
+
+func runCLI(t *testing.T, bin string, args ...string) (string, error) {
+	t.Helper()
+	var stdout bytes.Buffer
+	cmd := exec.Command(bin, args...)
+	cmd.Stdout = &stdout
+	err := cmd.Run()
+	return stdout.String(), err
+}
+
+func TestCLI_ListPlansAndReplay(t *testing.T) {
+	bin := buildCLI(t)
+	left, right := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(left, "a.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if out, err := runCLI(t, bin, "sync", "list-plans", "--left", left, "--json"); err != nil || strings.TrimSpace(out) != "[]" {
+		t.Fatalf("empty list-plans: err=%v out=%q", err, out)
+	}
+
+	planOut, err := runCLI(t, bin, "sync", "plan", "--left", left, "--right", right, "--direction", "l2r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var plan struct{ ID string }
+	if err := json.Unmarshal([]byte(planOut), &plan); err != nil || plan.ID == "" {
+		t.Fatalf("plan output: %v %q", err, planOut)
+	}
+
+	listOut, err := runCLI(t, bin, "sync", "list-plans", "--left", left, "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var list []struct {
+		ID       string `json:"id"`
+		Executed bool   `json:"executed"`
+	}
+	if err := json.Unmarshal([]byte(listOut), &list); err != nil || len(list) != 1 || list[0].ID != plan.ID || list[0].Executed {
+		t.Fatalf("list-plans after plan: err=%v out=%q", err, listOut)
+	}
+
+	replayOut, err := runCLI(t, bin, "sync", "replay", "--plan-id", plan.ID, "--left", left)
+	if err != nil {
+		t.Fatalf("replay failed: %v %q", err, replayOut)
+	}
+	var result struct{ Copied int }
+	if err := json.Unmarshal([]byte(replayOut), &result); err != nil || result.Copied != 1 {
+		t.Fatalf("replay output: %v %q", err, replayOut)
+	}
+	if _, err := os.Stat(filepath.Join(right, "a.txt")); err != nil {
+		t.Fatalf("replay did not copy: %v", err)
+	}
+}
+
+func TestCLI_ReplayUnknownPlan_Fails(t *testing.T) {
+	bin := buildCLI(t)
+	if _, err := runCLI(t, bin, "sync", "replay", "--plan-id", "00000000-0000-0000-0000-000000000000", "--left", t.TempDir()); err == nil {
+		t.Fatal("expected non-zero exit for unknown plan")
+	}
+}
+
+// RFC-041 §11: replay (cross-session, Plan.ID) and --resume (same-session,
+// sync.db) are different mechanisms and must not be combined.
+func TestCLI_ReplayResume_MutuallyExclusive(t *testing.T) {
+	bin := buildCLI(t)
+	_, err := runCLI(t, bin, "sync", "replay", "--plan-id", "00000000-0000-0000-0000-000000000000", "--left", t.TempDir(), "--resume")
+	if err == nil {
+		t.Fatal("expected replay --resume to be rejected")
+	}
+}

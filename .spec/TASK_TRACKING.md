@@ -172,6 +172,19 @@ P1 RFC 内的 UI-only、email/HTML、remote、RealtimeSync、distribution 任务
 | UI：normalize + SyncDiffView 保留并渲染空目录行               | UI-36/UI-37 | 🟢   |
 | 回归测试集（Go executor + UI）见 RFC-042 §4                   | EXEC-06     | 🟢   |
 
+### RFC-041 — Plan/ExecuteResult 持久化 + Replay + History（Approved 2026-08-08）
+
+| Task                                                                                    | IDs     | 状态 |
+| --------------------------------------------------------------------------------------- | ------- | ---- |
+| Plan 增加 ID/CreatedAt；planstore.go：Save/Load/List/SaveResult/LoadResult              | PLAN-01 | 🔵   |
+| BuildPlan 自动 SavePlan；Execute 自动 SaveExecuteResult（含 ItemSnapshots）             | PLAN-02 | 🔵   |
+| ReplayPlan：按 DoneItems 过滤 + stale-source 校验                                       | PLAN-03 | 🔵   |
+| CLI：`sync replay` + `sync list-plans --json`（与 --resume 互斥）                       | CLI-13  | 🔵   |
+| 桌面服务 ListPlans/ReplayPlan（spawn CLI）                                              | UI-38   | 🔵   |
+| UI：PlanHistoryPanel + SyncPlanModal view 模式（只读，禁止误触 sync）                   | UI-39   | 🔵   |
+| Go 测试集 11 项 + UI 测试 2 项（RFC-041 §9）                                            | PLAN-04 | 🔵   |
+| 评审注记：pinned 输出测试更新 + 缺失快照降级 + DoneItems 断言 + 互斥测试（RFC-041 §13） | PLAN-05 | 🔵   |
+
 ---
 
 ## 提案中的 RFC

@@ -61,6 +61,20 @@ type ExecuteResult struct {
 	Deleted    int            `json:"deleted"`
 	Errors     []string       `json:"errors"`
 	Restorable []RestoreEntry `json:"restorable,omitempty"`
+	// DoneItems lists confirmed successes (not failures), so replay re-runs
+	// everything else — failed and never-reached items alike. Cumulative
+	// across replays of the same plan.
+	DoneItems []string `json:"doneItems,omitempty"`
+	// ItemSnapshots holds the source state each attempted copy/delete acted
+	// on; replay refuses an item whose source changed since (stale-source).
+	ItemSnapshots map[string]ItemSnapshot `json:"itemSnapshots,omitempty"`
+}
+
+// ItemSnapshot is the size/mtime fingerprint of a plan item's source.
+type ItemSnapshot struct {
+	SourcePath  string `json:"sourcePath"`
+	Size        int64  `json:"size"`
+	ModTimeUnix int64  `json:"modTimeUnix"`
 }
 
 type RestoreEntry struct {

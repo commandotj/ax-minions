@@ -4,13 +4,14 @@
 
 作者: albert.li/AI
 创建时间: 2026-07-31
-状态: Draft — 待审批
+状态: Approved
 父 RFC: [RFC-2026-038](./038-sync-execution-verify-restore-replan.md)（umbrella）
 
 修改历史:
 
 - 2026-07-31: 初稿
 - 2026-07-31: `ReplayPlan` 参数顺序；`SyncPlanModal` 只读模式；033↔replay 关系；风险表补全
+- 2026-08-08: 批准（albert.li）；交付标准见 ROADMAP 提案中条目与 TASK_TRACKING RFC-041 区段
 
 ---
 
@@ -231,7 +232,20 @@ $ commando sync list-plans --left /a --json
 - `list-plans`/`PlanHistoryPanel` 是否要支持跨多个 sync root 聚合查看，还是只看当前选中的 leftRoot——本 RFC 默认只看当前 leftRoot，跨 root 聚合是更大的功能，不在此处处理
 - Plan 里 `RightRoot` 若在多次执行之间发生变化（用户改了同步目标），`ListPlans` 展示的历史记录如何标注失效——本 RFC 不处理，留待后续迭代
 
+## 13. 评审记录（2026-08-08，Linus/Kent/Martin 三人评审）
+
+**结论**：3× APPROVE（Linus/Kent 带注记），无 blocking 项。
+
+### 注记（已并入实施要求，非阻塞）
+
+1. **§2 行号漂移**：`types.go` Plan/PlanItem 现为 33-54（非 29-47）、`ExecuteResult` 57-64（非 50-55）、executor saveProgress 现为 74-79（非 59-63）。已按现状文本更新——实施时以符号名定位，不以行号。
+2. **`ExecuteResult` 缺字段（必改）**：现状 struct（types.go:57-64）无 `DoneItems`/`ItemSnapshots`。§3 新增字段必须落地，且每个成功路径 append——需要 `TestExecute_ResultCarriesDoneItemsAndSnapshots` 断言"部分失败时 DoneItems 长度 == 实际成功项"，防止 042 double-count 类 bug 以静态形式回归。
+3. **stale-source 缺失快照降级规则**：`ItemSnapshots[rel]` 缺失（旧 result 文件被删/手改 JSON）→ 降级为"重跑该项，不阻塞"，不得因缺快照而中止。补测试 `TestReplayPlan_MissingSnapshot_RunsItemNotBlocks`。
+4. **pinned 输出测试更新（必做）**：Plan/ExecuteResult 新增 JSON 字段会破坏 `TestPlanCmd_NoProgressFlag_UnchangedOutput` 等 pinned 测——从"风险"升级为任务项，见 TASK_TRACKING PLAN-05。
+5. **replay↔resume 互斥需测试**：`sync replay --plan-id` + `--resume` 同传必须报错——补 `TestCLI_ReplayResume_MutuallyExclusive`。
+6. **view 模式 UI 守则**：`SyncPlanModal` 现始终渲染 Confirm（143-152）——view 模式必须**隐藏**（非 disable）Confirm，且拒绝 `onConfirm={runSync}` 接线；补 UI 负向断言。
+
 ---
 
-**状态**: Draft
-**最后更新**: 2026-07-31
+**状态**: Approved
+**最后更新**: 2026-08-08 (三人评审注记归档 §13)

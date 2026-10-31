@@ -3,6 +3,7 @@ package sync
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -17,10 +18,85 @@ import (
 // relative path being processed. action describes what happened.
 type ProgressFn func(relPath string, action Action, done, total int, err error)
 
+// errStaleSource marks a replayed item whose source changed since an earlier
+// attempt: the user reviewed the old content, so it is not copied/deleted.
+var errStaleSource = errors.New("stale-source")
+
 // Execute runs a sync plan. ErrorMode="stop" aborts on first failure.
-// progress is called after each item (may be nil).
+// progress is called after each item (may be nil). The result is saved under
+// the plan's left root (RFC-041) unless DryRun, even on abort, so ReplayPlan
+// can pick up the unfinished items.
 func Execute(ctx context.Context, plan *Plan, opts Options, progress ProgressFn) (*ExecuteResult, error) {
-	result := &ExecuteResult{PlanID: plan.ID}
+	result, err := execute(ctx, plan, opts, progress, nil)
+	if !opts.DryRun && plan.LeftRoot != "" {
+		// ponytail: best-effort like GenerateSessionLog; a lost result only
+		// means replay re-runs every item.
+		_ = SaveExecuteResult(plan.LeftRoot, result)
+	}
+	return result, err
+}
+
+// ReplayPlan re-runs a saved plan, skipping items an earlier run confirmed
+// done and refusing items whose source changed since they were last attempted.
+// DoneItems/Restorable/ItemSnapshots in the saved result accumulate.
+func ReplayPlan(ctx context.Context, leftRoot, planID string, opts Options, progress ProgressFn) (*ExecuteResult, error) {
+	plan, err := LoadPlan(leftRoot, planID)
+	if err != nil {
+		return nil, err
+	}
+	prev, err := LoadExecuteResult(leftRoot, planID)
+	if os.IsNotExist(err) {
+		prev = &ExecuteResult{}
+	} else if err != nil {
+		return nil, err
+	}
+
+	done := make(map[string]bool, len(prev.DoneItems))
+	for _, rel := range prev.DoneItems {
+		done[rel] = true
+	}
+	replay := *plan
+	replay.Items = nil
+	for _, item := range plan.Items {
+		if !done[item.RelativePath] {
+			replay.Items = append(replay.Items, item)
+		}
+	}
+
+	result, runErr := execute(ctx, &replay, opts, progress, prev.ItemSnapshots)
+	if opts.DryRun {
+		return result, runErr
+	}
+	result.DoneItems = append(prev.DoneItems, result.DoneItems...)
+	result.Restorable = append(prev.Restorable, result.Restorable...)
+	for rel, snap := range prev.ItemSnapshots {
+		if _, ok := result.ItemSnapshots[rel]; !ok {
+			result.ItemSnapshots[rel] = snap
+		}
+	}
+	if err := SaveExecuteResult(leftRoot, result); err != nil && runErr == nil {
+		runErr = err
+	}
+	return result, runErr
+}
+
+// snapshotSource fingerprints the source an item is about to act on and
+// rejects it if it differs from an earlier attempt's fingerprint.
+func snapshotSource(item PlanItem, prev map[string]ItemSnapshot, result *ExecuteResult) error {
+	info, err := os.Stat(item.Source)
+	if err != nil {
+		return nil // a missing source surfaces as the copy/delete error itself
+	}
+	snap := ItemSnapshot{SourcePath: item.Source, Size: info.Size(), ModTimeUnix: info.ModTime().Unix()}
+	if old, ok := prev[item.RelativePath]; ok && (old.Size != snap.Size || old.ModTimeUnix != snap.ModTimeUnix) {
+		return errStaleSource // keep the old snapshot: the new content is still unreviewed
+	}
+	result.ItemSnapshots[item.RelativePath] = snap
+	return nil
+}
+
+func execute(ctx context.Context, plan *Plan, opts Options, progress ProgressFn, prevSnaps map[string]ItemSnapshot) (*ExecuteResult, error) {
+	result := &ExecuteResult{PlanID: plan.ID, ItemSnapshots: map[string]ItemSnapshot{}}
 	total := len(plan.Items)
 
 	for i, item := range plan.Items {
@@ -57,6 +133,17 @@ func Execute(ctx context.Context, plan *Plan, opts Options, progress ProgressFn)
 					continue
 				}
 				result.Copied++
+				result.DoneItems = append(result.DoneItems, item.RelativePath)
+				continue
+			}
+			if staleErr := snapshotSource(item, prevSnaps, result); staleErr != nil {
+				if progress != nil {
+					progress(item.RelativePath, item.Action, i+1, total, staleErr)
+				}
+				result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", item.RelativePath, staleErr))
+				if opts.ErrorMode == "stop" {
+					return result, fmt.Errorf("copy %s: %w", item.RelativePath, staleErr)
+				}
 				continue
 			}
 			cpErr := copyFileAtomic(item.Source, item.Destination)
@@ -86,9 +173,17 @@ func Execute(ctx context.Context, plan *Plan, opts Options, progress ProgressFn)
 					continue
 				}
 			}
+			result.DoneItems = append(result.DoneItems, item.RelativePath)
 		case ActionDelete:
 			if opts.DryRun {
 				result.Deleted++
+				continue
+			}
+			if staleErr := snapshotSource(item, prevSnaps, result); staleErr != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", item.RelativePath, staleErr))
+				if opts.ErrorMode == "stop" {
+					return result, fmt.Errorf("delete %s: %w", item.RelativePath, staleErr)
+				}
 				continue
 			}
 			method := deleteMethod(opts.DeleteMethod)
@@ -110,6 +205,7 @@ func Execute(ctx context.Context, plan *Plan, opts Options, progress ProgressFn)
 				}
 			}
 			result.Deleted++
+			result.DoneItems = append(result.DoneItems, item.RelativePath)
 			if restorePath != "" {
 				result.Restorable = append(result.Restorable, RestoreEntry{
 					RelativePath: item.RelativePath, OriginalPath: item.Source, BackupPath: restorePath,
