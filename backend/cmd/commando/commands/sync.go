@@ -87,6 +87,55 @@ func init() {
 	_ = planCmd.MarkFlagRequired("left")
 	_ = planCmd.MarkFlagRequired("right")
 
+	listPlansCmd := &cobra.Command{
+		Use:   "list-plans",
+		Short: "List saved sync plans",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			left, _ := cmd.Flags().GetString("left")
+			plans, err := sync.ListPlans(left)
+			if err != nil {
+				return err
+			}
+			return json.NewEncoder(os.Stdout).Encode(plans)
+		},
+	}
+	listPlansCmd.Flags().String("left", "", "left pane root")
+	listPlansCmd.Flags().Bool("json", false, "output JSON")
+	_ = listPlansCmd.MarkFlagRequired("left")
+
+	replayCmd := &cobra.Command{
+		Use:   "replay",
+		Short: "Replay unfinished items from a saved sync plan",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			resume, _ := cmd.Flags().GetBool("resume")
+			if resume {
+				return fmt.Errorf("--resume cannot be combined with sync replay")
+			}
+
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+			defer stop()
+
+			left, _ := cmd.Flags().GetString("left")
+			planID, _ := cmd.Flags().GetString("plan-id")
+			result, err := sync.ReplayPlan(ctx, left, planID, sync.Options{}, nil)
+			if err != nil {
+				return err
+			}
+			if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
+				return err
+			}
+			if len(result.Errors) > 0 {
+				return fmt.Errorf("%d errors", len(result.Errors))
+			}
+			return nil
+		},
+	}
+	replayCmd.Flags().String("plan-id", "", "saved sync plan ID")
+	replayCmd.Flags().String("left", "", "left pane root")
+	replayCmd.Flags().Bool("resume", false, "resume an active sync run (incompatible with replay)")
+	_ = replayCmd.MarkFlagRequired("plan-id")
+	_ = replayCmd.MarkFlagRequired("left")
+
 	runCmd := &cobra.Command{
 		Use:   "run",
 		Short: "Execute a sync between two folders",
@@ -120,16 +169,16 @@ func init() {
 			}
 
 			opts := sync.Options{
-				DryRun:          dryRun,
-				Filter:          rules,
-				DBPath:          filepath.Join(left, ".commando", "sync.db"),
-				Resume:          resume,
-				Reset:           reset,
+				DryRun:           dryRun,
+				Filter:           rules,
+				DBPath:           filepath.Join(left, ".commando", "sync.db"),
+				Resume:           resume,
+				Reset:            reset,
 				DeleteExtraneous: deleteExtra,
-				ErrorMode:       errorMode,
-				DeleteMethod:    deleteMethod,
-				VersionDir:      versionDir,
-				VerifyCopies:    verify,
+				ErrorMode:        errorMode,
+				DeleteMethod:     deleteMethod,
+				VersionDir:       versionDir,
+				VerifyCopies:     verify,
 			}
 			if reset {
 				clearResume(opts.DBPath, jobIDForSync(left, right, dir))
@@ -203,7 +252,7 @@ func init() {
 	_ = runCmd.MarkFlagRequired("left")
 	_ = runCmd.MarkFlagRequired("right")
 
-	syncCmd.AddCommand(planCmd, runCmd)
+	syncCmd.AddCommand(planCmd, runCmd, listPlansCmd, replayCmd)
 	rootCmd.AddCommand(syncCmd)
 }
 
